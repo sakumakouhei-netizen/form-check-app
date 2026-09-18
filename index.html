@@ -5,8 +5,22 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>フォーム比較アプリ</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: sans-serif; background: #121212; color: #fff; padding: 10px; user-select: none; -webkit-user-select: none; }
+    * { 
+      box-sizing: border-box; 
+      margin: 0; 
+      padding: 0; 
+      /* ダブルタップズームやパンを無効化 */
+      touch-action: manipulation;
+    }
+    
+    body { 
+      font-family: sans-serif; 
+      background: #121212; 
+      color: #fff; 
+      padding: 10px; 
+      user-select: none; 
+      -webkit-user-select: none; 
+    }
     
     .controls-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
     
@@ -25,9 +39,20 @@
     .control-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
     
     button, input[type="file"], input[type="range"] { font-size: 13px; padding: 5px 10px; }
-    button { cursor: pointer; background: #3a3a3c; color: white; border: none; border-radius: 4px; transition: 0.1s; }
+    button { 
+      cursor: pointer; 
+      background: #3a3a3c; 
+      color: white; 
+      border: none; 
+      border-radius: 4px; 
+      transition: background 0.1s, transform 0.05s;
+      /* 連続タップ時のテキスト選択などを防止 */
+      -webkit-touch-callout: none;
+      -webkit-user-select: none;
+      user-select: none;
+    }
     button:hover { opacity: 0.85; }
-    button:active { transform: scale(0.98); }
+    button:active { transform: scale(0.96); opacity: 0.8; }
     
     /* 各種ボタンカラー */
     .btn-main { background: #007bff; }
@@ -210,7 +235,6 @@
         }
       });
 
-      // 再生中の時間更新処理
       videoElement.addEventListener('timeupdate', () => {
         if (!videoElement.duration) return;
         const pct = (videoElement.currentTime / videoElement.duration) * 100;
@@ -218,7 +242,6 @@
         timeElem.textContent = `${formatTime(videoElement.currentTime)} / ${formatTime(videoElement.duration)}`;
       });
 
-      // シークバー操作
       seekElem.addEventListener('input', () => {
         if (!videoElement.duration) return;
         videoElement.currentTime = (seekElem.value / 100) * videoElement.duration;
@@ -227,6 +250,51 @@
 
     setupVideo(file1, video1, document.getElementById('seek1'), document.getElementById('time1'));
     setupVideo(file2, video2, document.getElementById('seek2'), document.getElementById('time2'));
+
+    // --- コマ送り処理 ＆ 長押し（ホールド）連写処理 ---
+    function stepFrame(video, amount) {
+      video.pause();
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + amount));
+    }
+
+    // コマ送りボタンのズーム防止＋長押し機能バインド
+    function setupHoldableButton(buttonElem, actionFn) {
+      let holdTimer = null;
+      let intervalTimer = null;
+
+      const start = (e) => {
+        // ダブルタップズーム等のデフォルト動作を防止
+        if (e.cancelable) e.preventDefault();
+        
+        // 1回タップ実行
+        actionFn();
+
+        // 長押し処理（250ms押したら毎秒20コマで連続実行）
+        clearTimeout(holdTimer);
+        clearInterval(intervalTimer);
+
+        holdTimer = setTimeout(() => {
+          intervalTimer = setInterval(() => {
+            actionFn();
+          }, 50); // 50msごとにコマ送り（約20fpsでスムーズ再生）
+        }, 250);
+      };
+
+      const stop = (e) => {
+        clearTimeout(holdTimer);
+        clearInterval(intervalTimer);
+      };
+
+      // タッチイベント
+      buttonElem.addEventListener('touchstart', start, { passive: false });
+      buttonElem.addEventListener('touchend', stop);
+      buttonElem.addEventListener('touchcancel', stop);
+
+      // マウスイベント（PC動作用）
+      buttonElem.addEventListener('mousedown', start);
+      buttonElem.addEventListener('mouseup', stop);
+      buttonElem.addEventListener('mouseleave', stop);
+    }
 
     // --- 1. 同時一括コントロール ---
     document.getElementById('btnPlayPauseAll').addEventListener('click', () => {
@@ -244,17 +312,13 @@
       video2.currentTime = 0;
     });
 
-    function stepFrame(video, amount) {
-      video.pause();
-      video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + amount));
-    }
-
-    document.getElementById('btnPrevFrameAll').addEventListener('click', () => {
+    // コマ送り（同時）を長押し対応でセットアップ
+    setupHoldableButton(document.getElementById('btnPrevFrameAll'), () => {
       stepFrame(video1, -FRAME_TIME);
       stepFrame(video2, -FRAME_TIME);
     });
 
-    document.getElementById('btnNextFrameAll').addEventListener('click', () => {
+    setupHoldableButton(document.getElementById('btnNextFrameAll'), () => {
       stepFrame(video1, FRAME_TIME);
       stepFrame(video2, FRAME_TIME);
     });
@@ -263,8 +327,9 @@
     document.getElementById('btnPlay1').addEventListener('click', () => {
       video1.paused ? video1.play().catch(()=>{}) : video1.pause();
     });
-    document.getElementById('btnPrev1').addEventListener('click', () => stepFrame(video1, -FRAME_TIME));
-    document.getElementById('btnNext1').addEventListener('click', () => stepFrame(video1, FRAME_TIME));
+
+    setupHoldableButton(document.getElementById('btnPrev1'), () => stepFrame(video1, -FRAME_TIME));
+    setupHoldableButton(document.getElementById('btnNext1'), () => stepFrame(video1, FRAME_TIME));
 
     const speedBtns1 = document.querySelectorAll('.btn-speed1');
     speedBtns1.forEach(btn => {
@@ -280,8 +345,9 @@
     document.getElementById('btnPlay2').addEventListener('click', () => {
       video2.paused ? video2.play().catch(()=>{}) : video2.pause();
     });
-    document.getElementById('btnPrev2').addEventListener('click', () => stepFrame(video2, -FRAME_TIME));
-    document.getElementById('btnNext2').addEventListener('click', () => stepFrame(video2, FRAME_TIME));
+
+    setupHoldableButton(document.getElementById('btnPrev2'), () => stepFrame(video2, -FRAME_TIME));
+    setupHoldableButton(document.getElementById('btnNext2'), () => stepFrame(video2, FRAME_TIME));
 
     const speedBtns2 = document.querySelectorAll('.btn-speed2');
     speedBtns2.forEach(btn => {
