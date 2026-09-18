@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>フォーム比較アプリ</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: sans-serif; background: #121212; color: #fff; padding: 10px; user-select: none; }
+    
+    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #222; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    button, input[type="file"], input[type="range"] { font-size: 14px; padding: 6px 12px; }
+    button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+    button:hover { opacity: 0.9; }
+    
+    .color-btn {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      border: 2px solid #fff;
+      cursor: pointer;
+      display: inline-block;
+      vertical-align: middle;
+      margin: 0 2px;
+    }
+    .color-btn.selected { outline: 3px solid #007bff; }
+
+    .view-container {
+      position: relative;
+      display: flex;
+      width: 100%;
+      height: calc(100vh - 140px);
+      gap: 10px;
+      background: #000;
+      touch-action: none; /* スマホ・タブレットのスクロールを抑制 */
+    }
+
+    .video-box {
+      flex: 1;
+      position: relative;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      overflow: hidden;
+    }
+    video { width: 100%; height: 100%; object-fit: contain; }
+
+    /* 重ね合わせ用キャンバス */
+    #overlayCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      display: none;
+      z-index: 2;
+      background: #000;
+      cursor: move; /* ドラッグできることを示すカーソル */
+    }
+    .view-container.overlay-mode #overlayCanvas { display: block; }
+    .view-container.overlay-mode .video-box { display: none; }
+
+    /* お絵描き用キャンバス */
+    #drawCanvas {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      pointer-events: none;
+      z-index: 10;
+    }
+    #drawCanvas.active {
+      pointer-events: auto;
+      cursor: crosshair;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 操作パネル -->
+  <div class="controls">
+    <div>
+      <label>お手本: <input type="file" id="file1" accept="video/*"></label>
+      <label>自分: <input type="file" id="file2" accept="video/*"></label>
+    </div>
+    
+    <div>
+      <button id="btnPlayPause">同時再生 / 停止</button>
+      <button id="btnReset">最初に戻す</button>
+    </div>
+
+    <div>
+      <button id="btnToggleOverlay">表示切替（並列 / 重ね合わせ）</button>
+    </div>
+
+    <!-- 重ね合わせ調整パネル -->
+    <div id="overlayControls" style="display:none; background: #333; padding: 4px 8px; border-radius: 4px;">
+      透過比率: <input type="range" id="rangeMix" min="0" max="1" step="0.02" value="0.5">
+      拡大率: <input type="range" id="rangeScale" min="0.5" max="2.0" step="0.05" value="1.0">
+      <button id="btnResetTransform" style="background: #6c757d;">位置リセット</button>
+    </div>
+
+    <div>
+      <button id="btnDrawToggle">書き込み: OFF</button>
+      <span id="colorPickerGroup" style="display:none; margin-left: 5px;">
+        <span class="color-btn selected" data-color="#ff3333" style="background: #ff3333;"></span>
+        <span class="color-btn" data-color="#33cc33" style="background: #33cc33;"></span>
+        <span class="color-btn" data-color="#ffcc00" style="background: #ffcc00;"></span>
+      </span>
+      <button id="btnClearCanvas" style="background: #dc3545; margin-left: 5px;">全消去</button>
+    </div>
+  </div>
+
+  <div class="view-container" id="container">
+    <div class="video-box" id="box1">
+      <video id="video1" controls playsinline></video>
+    </div>
+    <div class="video-box" id="box2">
+      <video id="video2" controls playsinline></video>
+    </div>
+    
+    <canvas id="overlayCanvas"></canvas>
+    <canvas id="drawCanvas"></canvas>
+  </div>
+
+  <script>
+    const video1 = document.getElementById('video1');
+    const video2 = document.getElementById('video2');
+    const file1 = document.getElementById('file1');
+    const file2 = document.getElementById('file2');
+    const container = document.getElementById('container');
+    const overlayCanvas = document.getElementById('overlayCanvas');
+    const oCtx = overlayCanvas.getContext('2d');
+    const drawCanvas = document.getElementById('drawCanvas');
+    const dCtx = drawCanvas.getContext('2d');
+
+    // 1. 動画読み込み
+    function loadVideo(input, videoElement) {
+      input.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          videoElement.src = URL.createObjectURL(file);
+        }
+      });
+    }
+    loadVideo(file1, video1);
+    loadVideo(file2, video2);
+
+    // 2. 同期再生
+    document.getElementById('btnPlayPause').addEventListener('click', () => {
+      if (video1.paused || video2.paused) {
+        video1.play();
+        video2.play();
+      } else {
+        video1.pause();
+        video2.pause();
+      }
+    });
+
+    document.getElementById('btnReset').addEventListener('click', () => {
+      video1.currentTime = 0;
+      video2.currentTime = 0;
+    });
+
+    // 3. 重ね合わせ・変形（ドラッグ＆スケール）処理
+    const btnToggleOverlay = document.getElementById('btnToggleOverlay');
+    const overlayControls = document.getElementById('overlayControls');
+    const rangeMix = document.getElementById('rangeMix');
+    const rangeScale = document.getElementById('rangeScale');
+    const btnResetTransform = document.getElementById('btnResetTransform');
+
+    let isOverlayMode = false;
+    let animFrameId = null;
+
+    // 「自分の動画（video2）」の位置・拡大パラメーター
+    let video2OffsetX = 0;
+    let video2OffsetY = 0;
+    let video2Scale = 1.0;
+
+    function resizeCanvases() {
+      overlayCanvas.width = container.clientWidth;
+      overlayCanvas.height = container.clientHeight;
+      drawCanvas.width = container.clientWidth;
+      drawCanvas.height = container.clientHeight;
+    }
+    window.addEventListener('resize', resizeCanvases);
+    resizeCanvases();
+
+    // リアルタイム描画処理
+    function renderOverlay() {
+      if (!isOverlayMode) return;
+
+      const w = overlayCanvas.width;
+      const h = overlayCanvas.height;
+      const mixRatio = parseFloat(rangeMix.value);
+
+      oCtx.clearRect(0, 0, w, h);
+
+      // 1. 下層：お手本動画（固定位置）
+      if (video1.readyState >= 2) {
+        oCtx.globalAlpha = 1 - mixRatio;
+        drawScaledVideo(video1, w, h, 0, 0, 1.0);
+      }
+
+      // 2. 上層：自分の動画（位置移動・拡大適用）
+      if (video2.readyState >= 2) {
+        oCtx.globalAlpha = mixRatio;
+        drawScaledVideo(video2, w, h, video2OffsetX, video2OffsetY, parseFloat(rangeScale.value));
+      }
+
+      oCtx.globalAlpha = 1.0;
+      animFrameId = requestAnimationFrame(renderOverlay);
+    }
+
+    // 描画関数
+    function drawScaledVideo(video, cw, ch, offsetX, offsetY, scaleFactor) {
+      const vw = video.videoWidth || cw;
+      const vh = video.videoHeight || ch;
+      const baseScale = Math.min(cw / vw, ch / vh);
+      const dw = vw * baseScale * scaleFactor;
+      const dh = vh * baseScale * scaleFactor;
+      const dx = (cw - dw) / 2 + offsetX;
+      const dy = (ch - dh) / 2 + offsetY;
+
+      oCtx.drawImage(video, dx, dy, dw, dh);
+    }
+
+    // モード切り替え
+    btnToggleOverlay.addEventListener('click', () => {
+      isOverlayMode = !isOverlayMode;
+      container.classList.toggle('overlay-mode', isOverlayMode);
+      overlayControls.style.display = isOverlayMode ? 'inline-flex' : 'none';
+
+      if (isOverlayMode) {
+        resizeCanvases();
+        renderOverlay();
+      } else {
+        if (animFrameId) cancelAnimationFrame(animFrameId);
+      }
+    });
+
+    // スライダー調整
+    rangeScale.addEventListener('input', (e) => {
+      video2Scale = parseFloat(e.target.value);
+    });
+
+    // 位置リセットボタン
+    btnResetTransform.addEventListener('click', () => {
+      video2OffsetX = 0;
+      video2OffsetY = 0;
+      rangeScale.value = 1.0;
+    });
+
+    // --- ドラッグ操作（動画の位置合わせ） ---
+    let isDraggingVideo = false;
+    let dragStartX = 0;
+    let dragStartY = 0;
+
+    function startVideoDrag(e) {
+      if (!isOverlayMode || drawMode) return; // 重ね合わせモードかつ書き込みOFFの時のみ動作
+      isDraggingVideo = true;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      dragStartX = clientX - video2OffsetX;
+      dragStartY = clientY - video2OffsetY;
+    }
+
+    function dragVideo(e) {
+      if (!isDraggingVideo) return;
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      video2OffsetX = clientX - dragStartX;
+      video2OffsetY = clientY - dragStartY;
+    }
+
+    function stopVideoDrag() {
+      isDraggingVideo = false;
+    }
+
+    overlayCanvas.addEventListener('mousedown', startVideoDrag);
+    overlayCanvas.addEventListener('mousemove', dragVideo);
+    overlayCanvas.addEventListener('mouseup', stopVideoDrag);
+
+    overlayCanvas.addEventListener('touchstart', startVideoDrag);
+    overlayCanvas.addEventListener('touchmove', dragVideo);
+    overlayCanvas.addEventListener('touchend', stopVideoDrag);
+
+    // 4. 書き込み機能 & 3色選択
+    let isDrawing = false;
+    let drawMode = false;
+    let currentColor = '#ff3333';
+
+    const btnDrawToggle = document.getElementById('btnDrawToggle');
+    const colorPickerGroup = document.getElementById('colorPickerGroup');
+
+    btnDrawToggle.addEventListener('click', () => {
+      drawMode = !drawMode;
+      btnDrawToggle.textContent = `書き込み: ${drawMode ? 'ON' : 'OFF'}`;
+      btnDrawToggle.style.background = drawMode ? '#28a745' : '#007bff';
+      colorPickerGroup.style.display = drawMode ? 'inline' : 'none';
+      drawCanvas.classList.toggle('active', drawMode);
+    });
+
+    const colorBtns = document.querySelectorAll('.color-btn');
+    colorBtns.forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        colorBtns.forEach(b => b.classList.remove('selected'));
+        e.target.classList.add('selected');
+        currentColor = e.target.getAttribute('data-color');
+      });
+    });
+
+    function getPos(e) {
+      const rect = drawCanvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: clientX - rect.left, y: clientY - rect.top };
+    }
+
+    function startDraw(e) {
+      if (!drawMode) return;
+      isDrawing = true;
+      const pos = getPos(e);
+      dCtx.beginPath();
+      dCtx.moveTo(pos.x, pos.y);
+    }
+
+    function draw(e) {
+      if (!isDrawing || !drawMode) return;
+      const pos = getPos(e);
+      dCtx.lineTo(pos.x, pos.y);
+      dCtx.strokeStyle = currentColor;
+      dCtx.lineWidth = 4;
+      dCtx.lineCap = 'round';
+      dCtx.stroke();
+    }
+
+    function stopDraw() { isDrawing = false; }
+
+    drawCanvas.addEventListener('mousedown', startDraw);
+    drawCanvas.addEventListener('mousemove', draw);
+    drawCanvas.addEventListener('mouseup', stopDraw);
+    
+    drawCanvas.addEventListener('touchstart', startDraw);
+    drawCanvas.addEventListener('touchmove', draw);
+    drawCanvas.addEventListener('touchend', stopDraw);
+
+    document.getElementById('btnClearCanvas').addEventListener('click', () => {
+      dCtx.clearRect(0, 0, drawCanvas.width, drawCanvas.height);
+    });
+  </script>
+</body>
+</html>
