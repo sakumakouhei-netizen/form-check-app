@@ -9,10 +9,17 @@
     body { font-family: sans-serif; background: #121212; color: #fff; padding: 10px; user-select: none; -webkit-user-select: none; }
     
     .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #222; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
+    .control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    
     button, input[type="file"], input[type="range"] { font-size: 14px; padding: 6px 12px; }
     button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
     button:hover { opacity: 0.9; }
     
+    /* 速度・コマ送り用ボタンのスタイル */
+    .btn-sub { background: #495057; }
+    .btn-sub.active { background: #28a745; font-weight: bold; }
+    .btn-frame { background: #17a2b8; }
+
     .color-btn {
       width: 26px;
       height: 26px;
@@ -30,7 +37,7 @@
       position: relative;
       display: flex;
       width: 100%;
-      height: calc(100vh - 140px);
+      height: calc(100vh - 180px);
       gap: 10px;
       background: #000;
       touch-action: none;
@@ -61,7 +68,7 @@
 
     /* === 重ね合わせモード（CSSレイヤー制御） === */
     .view-container.overlay-mode {
-      display: block; /* 並列から単一エリアへ変更 */
+      display: block;
     }
 
     .view-container.overlay-mode #box1 {
@@ -76,15 +83,14 @@
       top: 0; left: 0;
       width: 100%; height: 100%;
       z-index: 2;
-      background: transparent; /* 背景透過 */
+      background: transparent;
       will-change: transform, opacity;
       -webkit-transform: translateZ(0);
       transform: translateZ(0);
     }
 
-    /* 重ね合わせモード時の動画設定 */
     .view-container.overlay-mode video {
-      pointer-events: none; /* ドラッグ操作を邪魔しない */
+      pointer-events: none;
     }
 
     /* お絵描き用キャンバス */
@@ -108,17 +114,32 @@
 
   <!-- 操作パネル -->
   <div class="controls">
-    <div>
+    <div class="control-group">
       <label>お手本: <input type="file" id="file1" accept="video/*"></label>
       <label>自分: <input type="file" id="file2" accept="video/*"></label>
     </div>
     
-    <div>
+    <div class="control-group">
       <button id="btnPlayPause">同時再生 / 停止</button>
       <button id="btnReset">最初に戻す</button>
     </div>
 
-    <div>
+    <!-- 速度制御コントロール -->
+    <div class="control-group">
+      <span style="font-size:12px; color:#aaa;">再生速度:</span>
+      <button class="btn-sub btn-speed" data-speed="1.0">1.0x</button>
+      <button class="btn-sub btn-speed" data-speed="0.75">0.75x</button>
+      <button class="btn-sub btn-speed" data-speed="0.5">0.5x</button>
+      <button class="btn-sub btn-speed" data-speed="0.25">0.25x</button>
+    </div>
+
+    <!-- コマ送りコントロール -->
+    <div class="control-group">
+      <button id="btnPrevFrame" class="btn-frame">◀ 1コマ戻す</button>
+      <button id="btnNextFrame" class="btn-frame">1コマ進む ▶</button>
+    </div>
+
+    <div class="control-group">
       <button id="btnToggleOverlay">表示切替（並列 / 重ね合わせ）</button>
     </div>
 
@@ -129,7 +150,7 @@
       <button id="btnResetTransform" style="background: #6c757d;">位置リセット</button>
     </div>
 
-    <div>
+    <div class="control-group">
       <button id="btnDrawToggle">書き込み: OFF</button>
       <span id="colorPickerGroup" style="display:none; margin-left: 5px;">
         <span class="color-btn selected" data-color="#ff3333" style="background: #ff3333;"></span>
@@ -162,6 +183,9 @@
     const drawCanvas = document.getElementById('drawCanvas');
     const dCtx = drawCanvas.getContext('2d');
 
+    let currentPlaybackRate = 1.0;
+    const FRAME_TIME = 1 / 30; // 1コマあたりの秒数（約0.033秒 = 30fps換算）
+
     // 1. 動画読み込み
     function loadVideo(input, videoElement) {
       input.addEventListener('change', (e) => {
@@ -170,6 +194,7 @@
           videoElement.src = URL.createObjectURL(file);
           videoElement.playsInline = true;
           videoElement.muted = true;
+          videoElement.playbackRate = currentPlaybackRate;
           videoElement.load();
         }
       });
@@ -177,7 +202,7 @@
     loadVideo(file1, video1);
     loadVideo(file2, video2);
 
-    // 2. 同期再生
+    // 2. 同期再生・停止・速度・コマ送り
     document.getElementById('btnPlayPause').addEventListener('click', () => {
       if (video1.paused || video2.paused) {
         video1.play().catch(()=>{});
@@ -193,6 +218,34 @@
       video2.currentTime = 0;
     });
 
+    // 速度切り替え機能
+    const speedBtns = document.querySelectorAll('.btn-speed');
+    speedBtns.forEach(btn => {
+      if (btn.getAttribute('data-speed') === '1.0') btn.classList.add('active');
+      
+      btn.addEventListener('click', (e) => {
+        speedBtns.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        
+        currentPlaybackRate = parseFloat(e.target.getAttribute('data-speed'));
+        video1.playbackRate = currentPlaybackRate;
+        video2.playbackRate = currentPlaybackRate;
+      });
+    });
+
+    // コマ送り / コマ戻し機能
+    function stepFrame(amount) {
+      // コマ送り時は一旦停止させる
+      video1.pause();
+      video2.pause();
+
+      video1.currentTime = Math.max(0, Math.min(video1.duration || 0, video1.currentTime + amount));
+      video2.currentTime = Math.max(0, Math.min(video2.duration || 0, video2.currentTime + amount));
+    }
+
+    document.getElementById('btnPrevFrame').addEventListener('click', () => stepFrame(-FRAME_TIME));
+    document.getElementById('btnNextFrame').addEventListener('click', () => stepFrame(FRAME_TIME));
+
     // 3. 重ね合わせ & CSS変形処理
     const btnToggleOverlay = document.getElementById('btnToggleOverlay');
     const overlayControls = document.getElementById('overlayControls');
@@ -204,35 +257,28 @@
     let video2OffsetX = 0;
     let video2OffsetY = 0;
 
-    // トランスフォームと透明度のスタイル適用
     function updateOverlayStyles() {
       if (!isOverlayMode) return;
-      
       const opacityVal = rangeMix.value;
       const scaleVal = rangeScale.value;
 
-      // 自分の動画（box2）の透明度と位置・拡大を反映
       box2.style.opacity = opacityVal;
       video2.style.transform = `translate(${video2OffsetX}px, ${video2OffsetY}px) scale(${scaleVal})`;
     }
 
-    // スライダーイベント
     rangeMix.addEventListener('input', updateOverlayStyles);
     rangeScale.addEventListener('input', updateOverlayStyles);
 
-    // モード切り替え
     btnToggleOverlay.addEventListener('click', () => {
       isOverlayMode = !isOverlayMode;
       container.classList.toggle('overlay-mode', isOverlayMode);
       overlayControls.style.display = isOverlayMode ? 'inline-flex' : 'none';
 
       if (isOverlayMode) {
-        // 重ね合わせモード移行時のコントロール制御
         video1.controls = false;
         video2.controls = false;
         updateOverlayStyles();
       } else {
-        // 並列モードに戻す
         video1.controls = true;
         video2.controls = true;
         box2.style.opacity = '1';
@@ -241,7 +287,6 @@
       resizeCanvas();
     });
 
-    // 位置リセットボタン
     btnResetTransform.addEventListener('click', () => {
       video2OffsetX = 0;
       video2OffsetY = 0;
@@ -250,7 +295,7 @@
       updateOverlayStyles();
     });
 
-    // --- タッチ・ドラッグ操作（動画の位置合わせ） ---
+    // ドラッグ移動処理
     let isDraggingVideo = false;
     let dragStartX = 0;
     let dragStartY = 0;
@@ -274,11 +319,8 @@
       updateOverlayStyles();
     }
 
-    function stopVideoDrag() {
-      isDraggingVideo = false;
-    }
+    function stopVideoDrag() { isDraggingVideo = false; }
 
-    // ドラッグ用イベントを container(重ね合わせ枠) に登録
     container.addEventListener('mousedown', startVideoDrag);
     container.addEventListener('mousemove', dragVideo);
     container.addEventListener('mouseup', stopVideoDrag);
