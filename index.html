@@ -8,159 +8,164 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: sans-serif; background: #121212; color: #fff; padding: 10px; user-select: none; -webkit-user-select: none; }
     
-    .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; background: #222; padding: 10px; border-radius: 8px; margin-bottom: 10px; }
-    .control-group { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .controls-container { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
     
-    button, input[type="file"], input[type="range"] { font-size: 14px; padding: 6px 12px; }
-    button { cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
-    button:hover { opacity: 0.9; }
+    /* 上部の一括操作・表示切替パネル */
+    .global-controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: #222; padding: 8px 12px; border-radius: 8px; }
     
-    /* 速度・コマ送り用ボタンのスタイル */
-    .btn-sub { background: #495057; }
+    /* 個別動画操作パネルエリア */
+    .individual-controls { display: flex; gap: 10px; flex-wrap: wrap; }
+    .panel { flex: 1; min-width: 300px; background: #1e1e1e; padding: 8px 12px; border-radius: 8px; border-left: 4px solid #555; }
+    .panel.model-panel { border-left-color: #007bff; }
+    .panel.user-panel { border-left-color: #28a745; }
+    .panel-header { font-weight: bold; font-size: 13px; margin-bottom: 6px; display: flex; justify-content: space-between; align-items: center; }
+    .panel-header.model-title { color: #66b0ff; }
+    .panel-header.user-title { color: #5cdb95; }
+
+    .control-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-bottom: 4px; }
+    
+    button, input[type="file"], input[type="range"] { font-size: 13px; padding: 5px 10px; }
+    button { cursor: pointer; background: #3a3a3c; color: white; border: none; border-radius: 4px; transition: 0.1s; }
+    button:hover { opacity: 0.85; }
+    button:active { transform: scale(0.98); }
+    
+    /* 各種ボタンカラー */
+    .btn-main { background: #007bff; }
+    .btn-sync { background: #6f42c1; font-weight: bold; }
     .btn-sub.active { background: #28a745; font-weight: bold; }
     .btn-frame { background: #17a2b8; }
+    .btn-danger { background: #dc3545; }
+
+    .time-display { font-family: monospace; font-size: 12px; color: #ccc; min-width: 80px; text-align: right; }
+    .seek-bar { flex: 1; min-width: 100px; cursor: pointer; }
 
     .color-btn {
-      width: 26px;
-      height: 26px;
-      border-radius: 50%;
-      border: 2px solid #fff;
-      cursor: pointer;
-      display: inline-block;
-      vertical-align: middle;
-      margin: 0 2px;
+      width: 24px; height: 24px; border-radius: 50%; border: 2px solid #fff;
+      cursor: pointer; display: inline-block; vertical-align: middle; margin: 0 2px;
     }
     .color-btn.selected { outline: 3px solid #007bff; }
 
-    /* 全体表示エリア */
+    /* メイン比較エリア */
     .view-container {
-      position: relative;
-      display: flex;
-      width: 100%;
-      height: calc(100vh - 180px);
-      gap: 10px;
-      background: #000;
-      touch-action: none;
-      isolation: isolate;
-      overflow: hidden;
+      position: relative; display: flex; width: 100%; height: calc(100vh - 250px);
+      min-height: 350px; gap: 10px; background: #000; touch-action: none;
+      isolation: isolate; overflow: hidden; border-radius: 8px;
     }
 
-    /* 通常（並列）モードのボックス設定 */
     .video-box {
-      flex: 1;
-      position: relative;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      overflow: hidden;
-      background: #000;
-      transition: all 0.2s ease;
+      flex: 1; position: relative; display: flex;
+      justify-content: center; align-items: center; overflow: hidden; background: #000;
     }
 
     video { 
-      width: 100%; 
-      height: 100%; 
-      object-fit: contain;
-      pointer-events: auto;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
+      width: 100%; height: 100%; object-fit: contain; pointer-events: auto;
+      -webkit-transform: translateZ(0); transform: translateZ(0);
     }
 
-    /* === 重ね合わせモード（CSSレイヤー制御） === */
-    .view-container.overlay-mode {
-      display: block;
-    }
-
-    .view-container.overlay-mode #box1 {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 1;
-    }
-
+    /* 重ね合わせモード */
+    .view-container.overlay-mode { display: block; }
+    .view-container.overlay-mode #box1 { position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 1; }
     .view-container.overlay-mode #box2 {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      z-index: 2;
-      background: transparent;
-      will-change: transform, opacity;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2;
+      background: transparent; will-change: transform, opacity;
+      -webkit-transform: translateZ(0); transform: translateZ(0);
     }
+    .view-container.overlay-mode video { pointer-events: none; }
 
-    .view-container.overlay-mode video {
-      pointer-events: none;
-    }
-
-    /* お絵描き用キャンバス */
+    /* お絵描きキャンバス */
     #drawCanvas {
-      position: absolute;
-      top: 0; left: 0;
-      width: 100%; height: 100%;
-      pointer-events: none;
-      z-index: 10;
-      will-change: transform;
-      -webkit-transform: translateZ(0);
-      transform: translateZ(0);
+      position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none; z-index: 10; will-change: transform;
+      -webkit-transform: translateZ(0); transform: translateZ(0);
     }
-    #drawCanvas.active {
-      pointer-events: auto;
-      cursor: crosshair;
-    }
+    #drawCanvas.active { pointer-events: auto; cursor: crosshair; }
   </style>
 </head>
 <body>
 
-  <!-- 操作パネル -->
-  <div class="controls">
-    <div class="control-group">
-      <label>お手本: <input type="file" id="file1" accept="video/*"></label>
-      <label>自分: <input type="file" id="file2" accept="video/*"></label>
-    </div>
-    
-    <div class="control-group">
-      <button id="btnPlayPause">同時再生 / 停止</button>
-      <button id="btnReset">最初に戻す</button>
-    </div>
+  <div class="controls-container">
+    <!-- 1. 全体一括コントロール -->
+    <div class="global-controls">
+      <button id="btnPlayPauseAll" class="btn-sync">同時再生 / 一時停止</button>
+      <button id="btnResetAll">最初に戻す</button>
+      
+      <span style="border-left: 1px solid #444; height: 20px; margin: 0 4px;"></span>
+      
+      <button id="btnPrevFrameAll" class="btn-frame">◀ 同時コマ戻し</button>
+      <button id="btnNextFrameAll" class="btn-frame">同時コマ送り ▶</button>
 
-    <!-- 速度制御コントロール -->
-    <div class="control-group">
-      <span style="font-size:12px; color:#aaa;">再生速度:</span>
-      <button class="btn-sub btn-speed" data-speed="1.0">1.0x</button>
-      <button class="btn-sub btn-speed" data-speed="0.75">0.75x</button>
-      <button class="btn-sub btn-speed" data-speed="0.5">0.5x</button>
-      <button class="btn-sub btn-speed" data-speed="0.25">0.25x</button>
-    </div>
+      <span style="border-left: 1px solid #444; height: 20px; margin: 0 4px;"></span>
 
-    <!-- コマ送りコントロール -->
-    <div class="control-group">
-      <button id="btnPrevFrame" class="btn-frame">◀ 1コマ戻す</button>
-      <button id="btnNextFrame" class="btn-frame">1コマ進む ▶</button>
-    </div>
+      <button id="btnToggleOverlay" class="btn-main">表示切替（並列 / 重ね合わせ）</button>
 
-    <div class="control-group">
-      <button id="btnToggleOverlay">表示切替（並列 / 重ね合わせ）</button>
-    </div>
+      <!-- 重ね合わせ調整パネル -->
+      <div id="overlayControls" style="display:none; align-items: center; gap: 6px; background: #333; padding: 2px 8px; border-radius: 4px;">
+        <span style="font-size:12px;">透過率:</span>
+        <input type="range" id="rangeMix" min="0" max="1" step="0.02" value="0.5">
+        <span style="font-size:12px;">拡大率:</span>
+        <input type="range" id="rangeScale" min="0.5" max="2.0" step="0.05" value="1.0">
+        <button id="btnResetTransform" style="font-size:11px; padding: 2px 6px;">位置リセット</button>
+      </div>
 
-    <!-- 重ね合わせ調整パネル -->
-    <div id="overlayControls" style="display:none; background: #333; padding: 4px 8px; border-radius: 4px; align-items: center; gap: 8px;">
-      透過比率: <input type="range" id="rangeMix" min="0" max="1" step="0.02" value="0.5">
-      拡大率: <input type="range" id="rangeScale" min="0.5" max="2.0" step="0.05" value="1.0">
-      <button id="btnResetTransform" style="background: #6c757d;">位置リセット</button>
-    </div>
+      <span style="border-left: 1px solid #444; height: 20px; margin: 0 4px;"></span>
 
-    <div class="control-group">
+      <!-- 書き込みコントロール -->
       <button id="btnDrawToggle">書き込み: OFF</button>
-      <span id="colorPickerGroup" style="display:none; margin-left: 5px;">
+      <span id="colorPickerGroup" style="display:none;">
         <span class="color-btn selected" data-color="#ff3333" style="background: #ff3333;"></span>
         <span class="color-btn" data-color="#33cc33" style="background: #33cc33;"></span>
         <span class="color-btn" data-color="#ffcc00" style="background: #ffcc00;"></span>
       </span>
-      <button id="btnClearCanvas" style="background: #dc3545; margin-left: 5px;">全消去</button>
+      <button id="btnClearCanvas" class="btn-danger">全消去</button>
+    </div>
+
+    <!-- 2. 個別コントロール（お手本 ＆ 自分） -->
+    <div class="individual-controls">
+      <!-- お手本操作パネル -->
+      <div class="panel model-panel">
+        <div class="panel-header model-title">
+          <span>🔵 お手本動画</span>
+          <input type="file" id="file1" accept="video/*" style="font-size: 11px;">
+        </div>
+        <div class="control-row">
+          <button id="btnPlay1">再生/停止</button>
+          <button id="btnPrev1" class="btn-frame">◀ コマ戻し</button>
+          <button id="btnNext1" class="btn-frame">コマ送り ▶</button>
+          <span style="font-size:11px; color:#aaa; margin-left: auto;">速度:</span>
+          <button class="btn-sub btn-speed1" data-speed="1.0">1.0x</button>
+          <button class="btn-sub btn-speed1" data-speed="0.5">0.5x</button>
+          <button class="btn-sub btn-speed1" data-speed="0.25">0.25x</button>
+        </div>
+        <div class="control-row">
+          <input type="range" id="seek1" class="seek-bar" value="0" min="0" max="100" step="0.1">
+          <span id="time1" class="time-display">0:00 / 0:00</span>
+        </div>
+      </div>
+
+      <!-- 自分操作パネル -->
+      <div class="panel user-panel">
+        <div class="panel-header user-title">
+          <span>🟢 自分の動画</span>
+          <input type="file" id="file2" accept="video/*" style="font-size: 11px;">
+        </div>
+        <div class="control-row">
+          <button id="btnPlay2">再生/停止</button>
+          <button id="btnPrev2" class="btn-frame">◀ コマ戻し</button>
+          <button id="btnNext2" class="btn-frame">コマ送り ▶</button>
+          <span style="font-size:11px; color:#aaa; margin-left: auto;">速度:</span>
+          <button class="btn-sub btn-speed2" data-speed="1.0">1.0x</button>
+          <button class="btn-sub btn-speed2" data-speed="0.5">0.5x</button>
+          <button class="btn-sub btn-speed2" data-speed="0.25">0.25x</button>
+        </div>
+        <div class="control-row">
+          <input type="range" id="seek2" class="seek-bar" value="0" min="0" max="100" step="0.1">
+          <span id="time2" class="time-display">0:00 / 0:00</span>
+        </div>
+      </div>
     </div>
   </div>
 
+  <!-- 動画表示エリア -->
   <div class="view-container" id="container">
     <div class="video-box" id="box1">
       <video id="video1" controls playsinline webkit-playsinline muted></video>
@@ -183,27 +188,48 @@
     const drawCanvas = document.getElementById('drawCanvas');
     const dCtx = drawCanvas.getContext('2d');
 
-    let currentPlaybackRate = 1.0;
-    const FRAME_TIME = 1 / 30; // 1コマあたりの秒数（約0.033秒 = 30fps換算）
+    const FRAME_TIME = 1 / 30; // 1コマ＝約0.033秒 (30fps換算)
 
-    // 1. 動画読み込み
-    function loadVideo(input, videoElement) {
+    // --- 時間フォーマット変換 ---
+    function formatTime(sec) {
+      if (isNaN(sec)) return "0:00";
+      const m = Math.floor(sec / 60);
+      const s = Math.floor(sec % 60);
+      return `${m}:${s < 10 ? '0' : ''}${s}`;
+    }
+
+    // --- 動画のセットアップ関数 ---
+    function setupVideo(input, videoElement, seekElem, timeElem) {
       input.addEventListener('change', (e) => {
         const file = e.target.files[0];
         if (file) {
           videoElement.src = URL.createObjectURL(file);
           videoElement.playsInline = true;
           videoElement.muted = true;
-          videoElement.playbackRate = currentPlaybackRate;
           videoElement.load();
         }
       });
-    }
-    loadVideo(file1, video1);
-    loadVideo(file2, video2);
 
-    // 2. 同期再生・停止・速度・コマ送り
-    document.getElementById('btnPlayPause').addEventListener('click', () => {
+      // 再生中の時間更新処理
+      videoElement.addEventListener('timeupdate', () => {
+        if (!videoElement.duration) return;
+        const pct = (videoElement.currentTime / videoElement.duration) * 100;
+        seekElem.value = pct;
+        timeElem.textContent = `${formatTime(videoElement.currentTime)} / ${formatTime(videoElement.duration)}`;
+      });
+
+      // シークバー操作
+      seekElem.addEventListener('input', () => {
+        if (!videoElement.duration) return;
+        videoElement.currentTime = (seekElem.value / 100) * videoElement.duration;
+      });
+    }
+
+    setupVideo(file1, video1, document.getElementById('seek1'), document.getElementById('time1'));
+    setupVideo(file2, video2, document.getElementById('seek2'), document.getElementById('time2'));
+
+    // --- 1. 同時一括コントロール ---
+    document.getElementById('btnPlayPauseAll').addEventListener('click', () => {
       if (video1.paused || video2.paused) {
         video1.play().catch(()=>{});
         video2.play().catch(()=>{});
@@ -213,40 +239,61 @@
       }
     });
 
-    document.getElementById('btnReset').addEventListener('click', () => {
+    document.getElementById('btnResetAll').addEventListener('click', () => {
       video1.currentTime = 0;
       video2.currentTime = 0;
     });
 
-    // 速度切り替え機能
-    const speedBtns = document.querySelectorAll('.btn-speed');
-    speedBtns.forEach(btn => {
+    function stepFrame(video, amount) {
+      video.pause();
+      video.currentTime = Math.max(0, Math.min(video.duration || 0, video.currentTime + amount));
+    }
+
+    document.getElementById('btnPrevFrameAll').addEventListener('click', () => {
+      stepFrame(video1, -FRAME_TIME);
+      stepFrame(video2, -FRAME_TIME);
+    });
+
+    document.getElementById('btnNextFrameAll').addEventListener('click', () => {
+      stepFrame(video1, FRAME_TIME);
+      stepFrame(video2, FRAME_TIME);
+    });
+
+    // --- 2. 個別コントロール（お手本：video1） ---
+    document.getElementById('btnPlay1').addEventListener('click', () => {
+      video1.paused ? video1.play().catch(()=>{}) : video1.pause();
+    });
+    document.getElementById('btnPrev1').addEventListener('click', () => stepFrame(video1, -FRAME_TIME));
+    document.getElementById('btnNext1').addEventListener('click', () => stepFrame(video1, FRAME_TIME));
+
+    const speedBtns1 = document.querySelectorAll('.btn-speed1');
+    speedBtns1.forEach(btn => {
       if (btn.getAttribute('data-speed') === '1.0') btn.classList.add('active');
-      
       btn.addEventListener('click', (e) => {
-        speedBtns.forEach(b => b.classList.remove('active'));
+        speedBtns1.forEach(b => b.classList.remove('active'));
         e.target.classList.add('active');
-        
-        currentPlaybackRate = parseFloat(e.target.getAttribute('data-speed'));
-        video1.playbackRate = currentPlaybackRate;
-        video2.playbackRate = currentPlaybackRate;
+        video1.playbackRate = parseFloat(e.target.getAttribute('data-speed'));
       });
     });
 
-    // コマ送り / コマ戻し機能
-    function stepFrame(amount) {
-      // コマ送り時は一旦停止させる
-      video1.pause();
-      video2.pause();
+    // --- 3. 個別コントロール（自分：video2） ---
+    document.getElementById('btnPlay2').addEventListener('click', () => {
+      video2.paused ? video2.play().catch(()=>{}) : video2.pause();
+    });
+    document.getElementById('btnPrev2').addEventListener('click', () => stepFrame(video2, -FRAME_TIME));
+    document.getElementById('btnNext2').addEventListener('click', () => stepFrame(video2, FRAME_TIME));
 
-      video1.currentTime = Math.max(0, Math.min(video1.duration || 0, video1.currentTime + amount));
-      video2.currentTime = Math.max(0, Math.min(video2.duration || 0, video2.currentTime + amount));
-    }
+    const speedBtns2 = document.querySelectorAll('.btn-speed2');
+    speedBtns2.forEach(btn => {
+      if (btn.getAttribute('data-speed') === '1.0') btn.classList.add('active');
+      btn.addEventListener('click', (e) => {
+        speedBtns2.forEach(b => b.classList.remove('active'));
+        e.target.classList.add('active');
+        video2.playbackRate = parseFloat(e.target.getAttribute('data-speed'));
+      });
+    });
 
-    document.getElementById('btnPrevFrame').addEventListener('click', () => stepFrame(-FRAME_TIME));
-    document.getElementById('btnNextFrame').addEventListener('click', () => stepFrame(FRAME_TIME));
-
-    // 3. 重ね合わせ & CSS変形処理
+    // --- 4. 重ね合わせ & CSS変形処理 ---
     const btnToggleOverlay = document.getElementById('btnToggleOverlay');
     const overlayControls = document.getElementById('overlayControls');
     const rangeMix = document.getElementById('rangeMix');
@@ -259,11 +306,8 @@
 
     function updateOverlayStyles() {
       if (!isOverlayMode) return;
-      const opacityVal = rangeMix.value;
-      const scaleVal = rangeScale.value;
-
-      box2.style.opacity = opacityVal;
-      video2.style.transform = `translate(${video2OffsetX}px, ${video2OffsetY}px) scale(${scaleVal})`;
+      box2.style.opacity = rangeMix.value;
+      video2.style.transform = `translate(${video2OffsetX}px, ${video2OffsetY}px) scale(${rangeScale.value})`;
     }
 
     rangeMix.addEventListener('input', updateOverlayStyles);
@@ -295,10 +339,9 @@
       updateOverlayStyles();
     });
 
-    // ドラッグ移動処理
+    // 位置合わせドラッグ操作
     let isDraggingVideo = false;
-    let dragStartX = 0;
-    let dragStartY = 0;
+    let dragStartX = 0, dragStartY = 0;
 
     function startVideoDrag(e) {
       if (!isOverlayMode || drawMode) return;
@@ -329,7 +372,7 @@
     container.addEventListener('touchmove', dragVideo, { passive: false });
     container.addEventListener('touchend', stopVideoDrag);
 
-    // 4. 書き込み機能 & カラー切り替え
+    // --- 5. お絵描き機能 ---
     let isDrawing = false;
     let drawMode = false;
     let currentColor = '#ff3333';
@@ -351,8 +394,8 @@
     btnDrawToggle.addEventListener('click', () => {
       drawMode = !drawMode;
       btnDrawToggle.textContent = `書き込み: ${drawMode ? 'ON' : 'OFF'}`;
-      btnDrawToggle.style.background = drawMode ? '#28a745' : '#007bff';
-      colorPickerGroup.style.display = drawMode ? 'inline' : 'none';
+      btnDrawToggle.style.background = drawMode ? '#28a745' : '#3a3a3c';
+      colorPickerGroup.style.display = drawMode ? 'inline-block' : 'none';
       drawCanvas.classList.toggle('active', drawMode);
     });
 
